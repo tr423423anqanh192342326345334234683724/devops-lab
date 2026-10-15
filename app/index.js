@@ -5,7 +5,7 @@ const port = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Hello from DevOps Production Container!',
+    message: 'Hello from Kubernetes Production v2.0!',
     hostname: os.hostname(),
     timestamp: new Date().toISOString()
   });
