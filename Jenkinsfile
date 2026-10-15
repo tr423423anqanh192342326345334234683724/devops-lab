@@ -1,3 +1,4 @@
+cat << 'EOF' > Jenkinsfile
 pipeline {
     agent any
 
@@ -20,32 +21,29 @@ pipeline {
 
         stage('3. Run Health Check & Test') {
             steps {
-                sh """
-                # Lấy mạng docker hiện tại của container Jenkins
-                JENKINS_NET=\$(docker inspect \$(hostname) -f '{{range \$k, \$v := .NetworkSettings.Networks}}{{\$k}}{{end}}' | awk '{print \$1}')
-                
-                # Chạy container test nối chung mạng với Jenkins
-                docker run --rm -d --name test-temp-${BUILD_NUMBER} --network \${JENKINS_NET} ${APP_IMAGE}
-                
+                sh '''
+                # Chạy container test nối trực tiếp vào mạng minikube (mạng chung với Jenkins)
+                docker run --rm -d --name test-temp-${BUILD_NUMBER} --network minikube ${APP_IMAGE}
+
                 # Đợi container khởi động
                 sleep 3
-                
-                # Test trực tiếp bằng container name qua DNS nội bộ của Docker
+
+                # Test trực tiếp qua container name nội bộ
                 curl -f http://test-temp-${BUILD_NUMBER}:3000/ || exit 1
-                
+
                 # Dọn dẹp container test
                 docker stop test-temp-${BUILD_NUMBER}
-                """
+                '''
             }
         }
 
         stage('4. Deploy to Kubernetes') {
             steps {
-                sh """
+                sh '''
                 minikube image load ${APP_IMAGE}
                 kubectl set image deployment/web-deployment web-container=${APP_IMAGE}
                 kubectl rollout status deployment/web-deployment --timeout=60s
-                """
+                '''
             }
         }
     }
