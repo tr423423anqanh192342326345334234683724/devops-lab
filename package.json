@@ -1,0 +1,23 @@
+{
+  "name": "devops-lab",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tr423423anqanh192342326345334234683724/devops-lab.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tr423423anqanh192342326345334234683724/devops-lab/issues"
+  },
+  "homepage": "https://github.com/tr423423anqanh192342326345334234683724/devops-lab#readme",
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}

@@ -1,13 +1,14 @@
-# Stage 1: Runtime base
 FROM node:20-alpine
 WORKDIR /usr/src/app
 
-# Bảo mật: Dùng non-root user có sẵn của image alpine
-USER node
+# Copy file định nghĩa dependency trước để tối ưu Docker cache
+COPY package*.json ./
 
-# Copy app files
-COPY --chown=node:node app/ ./
+# Cài đặt toàn bộ dependencies bao gồm express
+RUN npm install --omit=dev
+
+# Copy toàn bộ mã nguồn
+COPY . .
 
 EXPOSE 3000
-
-CMD ["node", "index.js"]
+CMD ["node", "app/index.js"]
