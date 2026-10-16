@@ -1,3 +1,4 @@
+cat << 'EOF' > Jenkinsfile
 pipeline {
     agent any
 
@@ -18,114 +19,46 @@ pipeline {
         stage('2. Build Docker Image') {
             steps {
                 sh '''
-                    set -eu
-                    docker build -t "$APP_IMAGE" .
+                set -eu
+                docker build -t "$APP_IMAGE" .
                 '''
             }
         }
 
-      stage('3. Run Health Check & Test') {
-    steps {
-        sh '''
-            set -eu
-
-            cleanup() {
-                docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
-            }
-
-            trap cleanup EXIT
-
-            docker run -d \
-                --name "$TEST_CONTAINER" \
-                --network devops-lab_app-net \
-                "$APP_IMAGE"
-
-            TEST_IP=$(docker inspect \
-                --format '{{(index .NetworkSettings.Networks "minikube").IPAddress}}' \
-                "$TEST_CONTAINER")
-
-            if [ -z "$TEST_IP" ]; then
-                echo "Không lấy được IP của container test"
-                docker logs "$TEST_CONTAINER" || true
-                exit 1
-            fi
-
-            echo "Testing container at $TEST_IP:3000"
-
-            attempt=0
-            until curl -fsS "http://${TEST_IP}:3000/" >/dev/null; do
-                attempt=$((attempt + 1))
-
-                if [ "$attempt" -ge 15 ]; then
-                    echo "Health check failed"
-                    docker logs "$TEST_CONTAINER" || true
-                    exit 1
-                fi
-
-                sleep 2
-            done
-
-            echo "Health check passed"
-            curl -fsS "http://${TEST_IP}:3000/"
-            echo
-        '''
-    }
-}
-
-        stage('4. Verify Kubernetes Access') {
+        stage('3. Run Health Check & Test') {
             steps {
                 sh '''
-                    set -eu
+                set -eu
+                cleanup() {
+                    docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
+                }
+                trap cleanup EXIT
 
-                    kubectl get deployment "$DEPLOYMENT"
-                    kubectl get nodes
+                # Khởi chạy container test vào thẳng mạng minikube
+                docker run -d --name "$TEST_CONTAINER" --network minikube "$APP_IMAGE"
+
+                # Đợi container Node.js sẵn sàng
+                sleep 3
+
+                # Gọi trực tiếp qua tên container bằng DNS nội bộ của Docker
+                curl -fsS "http://${TEST_CONTAINER}:3000/" >/dev/null || exit 1
+                echo "Healthcheck passed successfully!"
                 '''
             }
         }
 
-        stage('5. Deploy to Kubernetes') {
+        stage('4. Deploy to Kubernetes') {
             steps {
                 sh '''
-                    set -eu
+                set -eu
+                echo "Loading image $APP_IMAGE into Minikube..."
+                minikube image load "$APP_IMAGE"
 
-                    # Xác nhận Minikube profile tồn tại
-                    minikube profile list
+                echo "Updating deployment..."
+                kubectl set image "deployment/$DEPLOYMENT" "$CONTAINER_NAME=$APP_IMAGE"
 
-                    # Đưa image vào cluster
-                    minikube image load "$APP_IMAGE"
-
-                    # Lưu lại cấu hình hiện tại để rollback nếu cần
-                    OLD_IMAGE=$(kubectl get deployment "$DEPLOYMENT" \
-                        -o jsonpath="{.spec.template.spec.containers[?(@.name==\\"$CONTAINER_NAME\\")].image}")
-
-                    if [ -z "$OLD_IMAGE" ]; then
-                        echo "Không tìm thấy container $CONTAINER_NAME"
-                        exit 1
-                    fi
-
-                    echo "Previous image: $OLD_IMAGE"
-
-                    # Cập nhật Deployment
-                    kubectl set image \
-                        "deployment/$DEPLOYMENT" \
-                        "$CONTAINER_NAME=$APP_IMAGE"
-
-                    # Chờ rollout và rollback nếu thất bại
-                    if ! kubectl rollout status \
-                        "deployment/$DEPLOYMENT" \
-                        --timeout=120s; then
-
-                        echo "Rollout failed. Rolling back..."
-                        kubectl rollout undo "deployment/$DEPLOYMENT"
-                        kubectl rollout status \
-                            "deployment/$DEPLOYMENT" \
-                            --timeout=120s || true
-
-                        exit 1
-                    fi
-
-                    echo "Deployment updated successfully"
-                    kubectl get pods
+                echo "Waiting for rollout to complete..."
+                kubectl rollout status "deployment/$DEPLOYMENT" --timeout=60s
                 '''
             }
         }
@@ -134,14 +67,12 @@ pipeline {
     post {
         always {
             sh '''
-                docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
+            docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
             '''
         }
-
         success {
-            echo "Deploy Kubernetes phiên bản ${APP_IMAGE} thành công!"
+            echo "Deploy Kubernetes phiên bản ${APP_IMAGE} thành công rực rỡ!"
         }
-
         failure {
             echo "Pipeline thất bại. Hãy kiểm tra rollout và trạng thái ứng dụng."
         }
