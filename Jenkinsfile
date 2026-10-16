@@ -69,7 +69,8 @@ pipeline {
                 minikube image load "$APP_IMAGE"
 
                 echo "Updating deployment..."
-                kubectl set image "deployment/$DEPLOYMENT" "$CONTAINER_NAME=$APP_IMAGE"
+                export KUBECONFIG=/var/jenkins_home/.kube/config
+                    kubectl set image "deployment/$DEPLOYMENT" "$CONTAINER_NAME=$APP_IMAGE"
 
                 echo "Waiting for rollout to complete..."
                 kubectl rollout status "deployment/$DEPLOYMENT" --timeout=60s
