@@ -37,7 +37,7 @@ pipeline {
 
             docker run -d \
                 --name "$TEST_CONTAINER" \
-                --network minikube \
+                --network devops-lab_app-net \
                 "$APP_IMAGE"
 
             TEST_IP=$(docker inspect \
