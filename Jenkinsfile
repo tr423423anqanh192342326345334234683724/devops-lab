@@ -24,44 +24,53 @@ pipeline {
             }
         }
 
-        stage('3. Run Health Check & Test') {
-            steps {
-                sh '''
-                    set -eu
+      stage('3. Run Health Check & Test') {
+    steps {
+        sh '''
+            set -eu
 
-                    cleanup() {
-                        docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
-                    }
-
-                    trap cleanup EXIT
-
-                    docker run -d \
-                        --name "$TEST_CONTAINER" \
-                        --network minikube \
-                        "$APP_IMAGE"
-
-                    attempt=0
-                    until curl -fsS \
-                        "http://${TEST_CONTAINER}:3000/" \
-                        >/dev/null; do
-
-                        attempt=$((attempt + 1))
-
-                        if [ "$attempt" -ge 15 ]; then
-                            echo "Health check failed"
-                            docker logs "$TEST_CONTAINER" || true
-                            exit 1
-                        fi
-
-                        sleep 2
-                    done
-
-                    echo "Health check passed"
-                    curl -fsS "http://${TEST_CONTAINER}:3000/"
-                    echo
-                '''
+            cleanup() {
+                docker rm -f "$TEST_CONTAINER" >/dev/null 2>&1 || true
             }
-        }
+
+            trap cleanup EXIT
+
+            docker run -d \
+                --name "$TEST_CONTAINER" \
+                --network minikube \
+                "$APP_IMAGE"
+
+            TEST_IP=$(docker inspect \
+                --format '{{(index .NetworkSettings.Networks "minikube").IPAddress}}' \
+                "$TEST_CONTAINER")
+
+            if [ -z "$TEST_IP" ]; then
+                echo "Không lấy được IP của container test"
+                docker logs "$TEST_CONTAINER" || true
+                exit 1
+            fi
+
+            echo "Testing container at $TEST_IP:3000"
+
+            attempt=0
+            until curl -fsS "http://${TEST_IP}:3000/" >/dev/null; do
+                attempt=$((attempt + 1))
+
+                if [ "$attempt" -ge 15 ]; then
+                    echo "Health check failed"
+                    docker logs "$TEST_CONTAINER" || true
+                    exit 1
+                fi
+
+                sleep 2
+            done
+
+            echo "Health check passed"
+            curl -fsS "http://${TEST_IP}:3000/"
+            echo
+        '''
+    }
+}
 
         stage('4. Verify Kubernetes Access') {
             steps {
