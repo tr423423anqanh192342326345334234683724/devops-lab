@@ -36,11 +36,15 @@ pipeline {
                 # Khởi chạy container test vào thẳng mạng minikube
                 docker run -d --name "$TEST_CONTAINER" --network minikube "$APP_IMAGE"
 
-                # Đợi container Node.js sẵn sàng
+                # Đợi container khởi động
                 sleep 3
 
-                # Gọi trực tiếp qua tên container bằng DNS nội bộ của Docker
-                curl -fsS "http://${TEST_CONTAINER}:3000/" >/dev/null || exit 1
+                # Lấy trực tiếp IP nội bộ trong mạng minikube
+                TEST_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$TEST_CONTAINER")
+                echo "Testing container at IP: $TEST_IP"
+
+                # Gọi curl trực tiếp qua IP
+                curl -fsS "http://${TEST_IP}:3000/" >/dev/null || exit 1
                 echo "Healthcheck passed successfully!"
                 '''
             }
