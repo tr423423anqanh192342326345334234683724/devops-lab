@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -33,18 +34,28 @@ pipeline {
                 }
                 trap cleanup EXIT
 
-                # Khởi chạy container test vào thẳng mạng minikube
-                docker run -d --name "$TEST_CONTAINER" --network minikube "$APP_IMAGE"
+                # Khởi chạy container độc lập
+                docker run -d --name "$TEST_CONTAINER" "$APP_IMAGE"
 
-                # Đợi container khởi động
+                # Đợi ứng dụng Node.js khởi động
                 sleep 3
 
-                # Lấy trực tiếp IP nội bộ trong mạng minikube
-                TEST_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$TEST_CONTAINER")
-                echo "Testing container at IP: $TEST_IP"
-
-                # Gọi curl trực tiếp qua IP
-                curl -fsS "http://${TEST_IP}:3000/" >/dev/null || exit 1
+                # Test trực tiếp bằng Node bên trong container
+                docker exec "$TEST_CONTAINER" node -e '
+                  const http = require("http");
+                  http.get("http://127.0.0.1:3000/", (res) => {
+                    if (res.statusCode === 200) {
+                      console.log("Healthcheck HTTP 200 OK");
+                      process.exit(0);
+                    } else {
+                      console.error("Healthcheck status:", res.statusCode);
+                      process.exit(1);
+                    }
+                  }).on("error", (err) => {
+                    console.error("Healthcheck error:", err.message);
+                    process.exit(1);
+                  });
+                '
                 echo "Healthcheck passed successfully!"
                 '''
             }
